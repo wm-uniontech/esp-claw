@@ -243,8 +243,6 @@ menu "App Claw Config"
             bool "Enable BLE HID Lua module"
             default n
             depends on APP_CLAW_CAP_LUA
-            select BT_ENABLED
-            select BT_NIMBLE_ENABLED
             select BT_NIMBLE_HID_SERVICE
             help
                 Enable the BLE HID Lua module for Consumer Control, Keyboard, Mouse,

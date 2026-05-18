@@ -197,14 +197,6 @@ function M.action_types()
     return types
 end
 
-function M.default_bindings()
-    return {
-        ["button:main:single_click"] = { type = "media", key = "play_pause", gesture = "single" },
-        ["button:main:double_click"] = { type = "media", key = "next_track", gesture = "single" },
-        ["button:main:long_press_start"] = { type = "media", key = "volume_up", gesture = "single" },
-    }
-end
-
 local function require_ble_hid()
     local ok, ble_hid = pcall(require, "ble_hid")
     if not ok then

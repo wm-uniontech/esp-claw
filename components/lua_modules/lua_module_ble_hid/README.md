@@ -1,72 +1,52 @@
-# lua_module_ble_hid
+# Lua BLE HID
 
-## Overview
+This module describes how to correctly use BLE HID when writing Lua scripts.
+It exposes the device as a composite BLE HID peripheral with media control,
+keyboard, and mouse input reports.
 
-`lua_module_ble_hid` is a thin BLE HID profile adapter for ESP-Claw. It keeps
-only the product-facing HID surface in this component:
+## How to call
+- Import it with `local ble_hid = require("ble_hid")`
+- Call `ble_hid.init([{ name = "esp-claw-hid" }])` before advertising or sending reports
+- Call `ble_hid.start([{ name = "esp-claw-hid" }])` to start HID advertising
+- Pair from the host operating system Bluetooth settings with the advertised name
+- Call `ble_hid.status()` to read `{ initialized, advertising, connected, bonded }`
+- Call `ble_hid.media(key [, gesture])` to send a Consumer Control report
+- Call `ble_hid.key(key)` to press and release one keyboard key
+- Call `ble_hid.combo(key_or_modifier, ...)` to press a shortcut such as `CTRL+C`
+- Call `ble_hid.text(text)` to type printable ASCII text on a US keyboard layout
+- Call `ble_hid.mouse_move(dx, dy [, wheel [, pan]])` to move the mouse
+- Call `ble_hid.mouse_scroll(wheel [, pan])` to scroll vertically or horizontally
+- Call `ble_hid.mouse_button(button [, gesture])` to click, press, or release a mouse button
+- Call `ble_hid.release_all()` before stopping or after interrupted pointer/key actions
+- Call `ble_hid.stop()` to stop advertising, and `ble_hid.deinit()` to release the HID stack
 
-- one combined HID report map for Consumer Control, Keyboard, and Mouse
-- small report encoders that create report bytes
-- ESP-IDF `esp_hidd` glue
-- Lua bindings exposed as `require("ble_hid")`
-- BLE HID skill scripts for agent-driven runtime operations
+`init` and `start` accept an optional `name` field. The name length must be 29
+bytes or less. The default name is `esp-claw-hid`.
 
-The BLE HID GATT service, HID characteristics, CCCD handling, protocol mode,
-control point, and notification transport are owned by ESP-IDF `esp_hidd`.
-
-## Ownership
-
-Runtime ownership is:
-
-```text
-Lua behavior scripts
--> ble_hid.* Lua binding
--> esp_hidd_dev_input_set()
--> ESP-IDF esp_hidd
--> ESP-IDF NimBLE / Bluetooth controller
-```
-
-`lua_module_ble_hid` owns its BLE HID runtime directly. It initializes the
-Bluetooth controller, NimBLE host, HID GATT service, security, connection state,
-and HID advertising without depending on `lua_module_ble`.
-
-Do not start the generic `lua_module_ble` advertising while BLE HID is running.
-The two modules can be compiled into the same firmware, but they must not both
-try to own the active BLE host / advertising session at runtime.
-
-## C Implementation
-
-The C side is intentionally contained in:
-
-```text
-src/lua_module_ble_hid.c
-src/lua_module_ble_hid.h
-```
-
-`lua_module_ble_hid.c` contains static report map bytes, static key/action lookup
-tables, minimal report encoding, and the `esp_hidd` device handle. There are no
-separate HID transport, HID runtime dispatcher, profile registry, or HID service
-component files.
-
-## Lua API
-
+## Example
 ```lua
 local ble_hid = require("ble_hid")
 
-ble_hid.init()
-ble_hid.start({ name = "esp-claw-hid" })
+local ok, err = ble_hid.init({ name = "esp-claw-hid" })
+if not ok then
+    error(err)
+end
+
+ok, err = ble_hid.start({ name = "esp-claw-hid" })
+if not ok then
+    error(err)
+end
+
+print("Pair with esp-claw-hid from the host Bluetooth settings")
+
+local status = ble_hid.status()
+print("connected:", status.connected, "bonded:", status.bonded)
 
 ble_hid.media("play_pause")
 ble_hid.media("volume_up")
-ble_hid.media("volume_down")
-ble_hid.media("next_track")
-ble_hid.media("previous_track")
-ble_hid.media("mute")
-
 ble_hid.key("ENTER")
 ble_hid.combo("CTRL", "C")
 ble_hid.text("hello")
-
 ble_hid.mouse_move(20, 0)
 ble_hid.mouse_button("left", "click")
 ble_hid.mouse_scroll(-3, 0)
@@ -76,138 +56,107 @@ ble_hid.stop()
 ble_hid.deinit()
 ```
 
-`ble_hid.text(text)` is ASCII keyboard simulation on a standard US keyboard layout.
-It supports printable ASCII plus newline and tab. It does not promise Unicode,
-IME behavior, emoji, dead keys, or non-US layout correctness.
+## Supported Input
 
-## Runtime Scripts
+Media keys:
+- `volume_up`
+- `volume_down`
+- `play_pause`
+- `next_track`
+- `previous_track`
+- `mute`
 
-Agent-facing runtime scripts live under `/fatfs/skills/ble_hid/scripts/` on the device:
+Media gestures:
+- `single`
+- `double`
+- `long`
 
-```text
-/fatfs/skills/ble_hid/scripts/start_ble_hid.lua
-/fatfs/skills/ble_hid/scripts/send_ble_hid_action.lua
-/fatfs/skills/ble_hid/scripts/update_ble_hid_binding.lua
-```
+Keyboard keys include:
+- `A` through `Z`
+- `0` through `9`
+- `ENTER`, `ESC`, `BACKSPACE`, `TAB`, `SPACE`
+- `MINUS`, `EQUAL`, `LEFT_BRACKET`, `RIGHT_BRACKET`, `BACKSLASH`
+- `SEMICOLON`, `QUOTE`, `GRAVE`, `COMMA`, `PERIOD`, `SLASH`
+- `CAPS_LOCK`, `F1` through `F12`
+- `PRINT_SCREEN`, `SCROLL_LOCK`, `PAUSE`, `INSERT`, `HOME`
+- `PAGE_UP`, `DELETE`, `END`, `PAGE_DOWN`
+- `RIGHT`, `LEFT`, `DOWN`, `UP`
 
-Roles:
+Keyboard modifiers for `combo`:
+- `CTRL`, `CONTROL`
+- `SHIFT`
+- `ALT`, `OPTION`
+- `GUI`, `COMMAND`, `CMD`, `META`
+- `RIGHT_CTRL`, `RIGHT_SHIFT`, `RIGHT_ALT`, `RIGHT_GUI`
 
-- `start_ble_hid.lua`: idempotently initialize BLE HID and start HID advertising
-- `send_ble_hid_action.lua`: send one media, keyboard, or mouse action
-- `update_ble_hid_binding.lua`: update or reset local button-to-action bindings
+Mouse buttons:
+- `left`
+- `right`
+- `middle`
 
-Reusable internal libraries live under `lib/`:
+Mouse button gestures:
+- `click`
+- `down`
+- `up`
 
-```text
-lib/ble_hid_actions.lua
-lib/ble_hid_settings.lua
-```
+`ble_hid.text(text)` simulates basic ASCII on a standard US keyboard layout. It
+supports letters, digits, common printable punctuation, space, newline, and tab.
+It does not support Unicode, IME input, emoji, dead keys, or non-US layout
+correction.
 
-These are internal modules, not agent entry points.
+## Return Values
 
-## Local Button Rules
+Most operations return `true` on success. Runtime failures return `nil, err`.
+Argument validation errors raise Lua errors.
 
-`lua_module_ble_hid` does not listen to physical buttons. Local input handling is
-an application-layer concern. In `edge_agent`, app skills under
-`application/edge_agent/main/skills/ble_hid_input/` require both `button` and
-`ble_hid` to listen for physical input and dispatch mapped HID actions.
-
-The shared binding configuration lives at:
-
-```text
-/fatfs/scripts/config/ble_hid_bindings.lua
-```
-
-The default input is:
-
-```lua
-inputs = {
-    main = {
-        type = "button",
-        gpio = 0,
-        active_level = 0,
-    },
-}
-```
-
-Default bindings:
-
-```lua
-bindings = {
-    ["button:main:single_click"] = { type = "media", key = "play_pause", gesture = "single" },
-    ["button:main:double_click"] = { type = "media", key = "next_track", gesture = "single" },
-    ["button:main:long_press_start"] = { type = "media", key = "volume_up", gesture = "single" },
-}
-```
-
-Supported local events are `single_click`, `double_click`, `long_press_start`,
-and `long_press_up`. Supported action types are `media`, `keyboard_key`,
-`keyboard_text`, `mouse_button`, `mouse_move`, and `mouse_scroll`.
-
-Use `update_ble_hid_binding.lua` to update the file. BLE HID is a composite
-device: media, keyboard, and mouse reports are all available at the same time,
-and each binding action decides which report type is sent. The next
-application-layer button dispatch will use the latest saved configuration.
-
-Application-layer listener:
-
-```text
-/fatfs/skills/ble_hid_input/scripts/listen_ble_hid_input.lua
-```
-
-The `edge_agent` application starts this listener from its
-`startup/boot_completed` router rule. The listener reads the configured
-`inputs.main` GPIO and active level from `/fatfs/scripts/config/ble_hid_bindings.lua`
-unless explicit args are provided.
+Typical failures are:
+- `HID not initialized`: call `ble_hid.init()` first
+- `not connected`: pair and connect from the host before sending reports
+- `unsupported ...`: use one of the supported key, modifier, media, button, or gesture names
 
 ## HID Reports
 
-The report map defines three input reports in one HID service:
+The module owns one BLE HID service with three input reports:
+- Consumer Control: report ID `1`, 1 byte
+- Keyboard: report ID `2`, 8 bytes, `modifier + reserved + 6 keycodes`
+- Mouse: report ID `3`, 5 bytes, `buttons + x + y + wheel + horizontal pan`
 
-- Consumer Control: Report ID 1, 1 byte
-- Keyboard: Report ID 2, 8 bytes (`modifier + reserved + 6 keycodes`)
-- Mouse: Report ID 3, 5 bytes (`buttons + x + y + wheel + horizontal pan`)
-
-Application code sends report payload bytes through:
+The C implementation sends report payload bytes with:
 
 ```c
 esp_hidd_dev_input_set(dev, 0, report_id, data, len);
 ```
 
-The report payload does not include the report ID; `esp_hidd` handles the BLE HID
-service and report characteristic transport.
+The payload does not include the report ID. ESP-IDF `esp_hidd` owns the HID GATT
+service, characteristics, CCCD handling, protocol mode, control point, and BLE
+notification transport.
 
-## Configuration
+## Runtime Scripts
 
-Enable:
+Agent-facing runtime scripts are installed under `/fatfs/skills/ble_hid/scripts/`:
+- `/fatfs/skills/ble_hid/scripts/start_ble_hid.lua`
+- `/fatfs/skills/ble_hid/scripts/send_ble_hid_action.lua`
 
-```text
-CONFIG_BT_ENABLED=y
-CONFIG_BT_NIMBLE_ENABLED=y
-CONFIG_BT_NIMBLE_HID_SERVICE=y
-CONFIG_APP_CLAW_LUA_MODULE_BLE_HID=y
+`start_ble_hid.lua` initializes BLE HID and starts advertising if needed.
+`send_ble_hid_action.lua` sends one explicit media, keyboard, or mouse action.
+
+The reusable action helper is `lib/ble_hid_actions.lua`. It is an internal
+library, not a direct runtime entry point.
+
+Example runtime calls:
+
+```json
+{"path":"/fatfs/skills/ble_hid/scripts/start_ble_hid.lua","args":{"name":"esp-claw-hid"},"timeout_ms":10000}
 ```
 
-For HID-focused builds, disable `CONFIG_APP_CLAW_BLE_TEST_SERVICE` and avoid
-starting `lua_module_ble/test/test_ble.lua`; that script is for the generic
-`0xFFF0/0xFFF1` BLE test service, not HID.
-
-## Verification
-
-Runtime entry point from the ESP-Claw Lua console:
-
-```text
-lua --run --path /fatfs/skills/ble_hid/scripts/start_ble_hid.lua --timeout-ms 10000
+```json
+{"path":"/fatfs/skills/ble_hid/scripts/send_ble_hid_action.lua","args":{"type":"media","key":"play_pause"},"timeout_ms":5000}
 ```
 
-Developer-only HID verification after flashing `edge_agent`:
-
-```text
-lua --run --path builtin/test/test_ble_hid.lua --timeout-ms 60000
+```json
+{"path":"/fatfs/skills/ble_hid/scripts/send_ble_hid_action.lua","args":{"type":"keyboard_combo","keys":["CTRL","C"]},"timeout_ms":5000}
 ```
 
-Do not use scripts under `test/` as runtime entry points for agent behavior; they
-exist only for developer bring-up and manual debugging.
-
-Pair from the operating system Bluetooth settings. HID hosts normally discover
-the HID service and subscribe to reports through the system Bluetooth stack.
+```json
+{"path":"/fatfs/skills/ble_hid/scripts/send_ble_hid_action.lua","args":{"type":"mouse_move","dx":30,"dy":0},"timeout_ms":5000}
+```
