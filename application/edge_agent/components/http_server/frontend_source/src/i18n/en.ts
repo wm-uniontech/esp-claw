@@ -153,6 +153,9 @@ export const en = {
   imValidationInvalidField: '{field} for {platform} is not valid.',
   imWechatCredsFilled:
     'Credentials filled from QR login. Review in Advanced settings and click Save to persist.',
+  qqMsgType: 'Message Type',
+  qqMsgTypePlain: 'Plain Text',
+  qqMsgTypeMarkdown: 'Markdown',
   qqAppId: 'QQ App ID',
   qqAppSecret: 'QQ App Secret',
   feishuAppId: 'Feishu App ID',

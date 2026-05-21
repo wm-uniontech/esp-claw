@@ -18,6 +18,7 @@ export type AppConfig = {
   llm_image_remote_url_only: string;
   qq_app_id: string;
   qq_app_secret: string;
+  qq_msg_type: string;
   feishu_app_id: string;
   feishu_app_secret: string;
   tg_bot_token: string;
@@ -64,6 +65,7 @@ export const GROUP_FIELDS: Record<ConfigGroup, (keyof AppConfig)[]> = {
   im: [
     'qq_app_id',
     'qq_app_secret',
+    'qq_msg_type',
     'feishu_app_id',
     'feishu_app_secret',
     'tg_bot_token',

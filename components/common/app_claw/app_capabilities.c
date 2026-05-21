@@ -8,6 +8,7 @@
 #include "app_lua_modules.h"
 
 #include <ctype.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -262,6 +263,12 @@ static esp_err_t app_cap_prepare_im_qq(const app_claw_config_t *config,
         ESP_RETURN_ON_ERROR(cap_im_qq_set_credentials(config->qq_app_id, config->qq_app_secret),
                             TAG, "Failed to set QQ credentials");
     }
+
+    int msg_type = 0;
+    if (config->qq_msg_type[0]) {
+        msg_type = atoi(config->qq_msg_type);
+    }
+    cap_im_qq_set_msg_type(msg_type);
 
     return ESP_OK;
 }
